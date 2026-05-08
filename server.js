@@ -49,70 +49,70 @@ async function handleToolCalls(message, res) {
   return res.json({ results });
 }
 
+async function logToSheets(data) {
+  if (!process.env.GOOGLE_SHEETS_URL) return;
+  try {
+    await axios.post(process.env.GOOGLE_SHEETS_URL, data);
+  } catch (e) {
+    console.error('[SHEETS ERROR]', e.message);
+  }
+}
+
 async function logPropertyEnquiry(p) {
-  await notifySlack(
-    `🏠 *New Property Enquiry*\n` +
-    `Name: ${p.caller_name}\n` +
-    `Phone: ${p.caller_phone}\n` +
-    `Email: ${p.caller_email || 'Not provided'}\n` +
-    `Property: ${p.property_address || 'Not specified'}\n` +
-    `Type: ${p.enquiry_type}\n` +
-    `Notes: ${p.notes || 'None'}`
-  );
+  await logToSheets({
+    caller_name: p.caller_name,
+    caller_phone: p.caller_phone,
+    caller_email: p.caller_email || 'Not provided',
+    property_address: p.property_address || 'Not specified',
+    enquiry_type: p.enquiry_type,
+    outcome: 'Enquiry logged',
+    follow_up_required: true
+  });
   return { success: true };
 }
 
 async function scheduleInspection(p) {
-  await notifySlack(
-    `📅 *Inspection Request*\n` +
-    `Name: ${p.caller_name}\n` +
-    `Phone: ${p.caller_phone}\n` +
-    `Property: ${p.property_address}\n` +
-    `Type: ${p.inspection_type}\n` +
-    `Date: ${p.preferred_date} at ${p.preferred_time}\n` +
-    `Special needs: ${p.special_requirements || 'None'}`
-  );
+  await logToSheets({
+    caller_name: p.caller_name,
+    caller_phone: p.caller_phone,
+    caller_email: p.caller_email || 'Not provided',
+    property_address: p.property_address,
+    enquiry_type: 'Inspection - ' + p.inspection_type,
+    outcome: `Inspection requested for ${p.preferred_date} at ${p.preferred_time}`,
+    follow_up_required: true
+  });
   return { success: true };
 }
 
 async function requestAgentCallback(p) {
-  const urgencyEmoji = p.urgency === 'urgent' ? '🚨' : '📞';
-  await notifySlack(
-    `${urgencyEmoji} *Agent Callback Request*\n` +
-    `Name: ${p.caller_name}\n` +
-    `Phone: ${p.caller_phone}\n` +
-    `Best time: ${p.best_time_to_call || 'Any time'}\n` +
-    `Agent: ${p.agent_name || 'Any available'}\n` +
-    `Reason: ${p.reason}`
-  );
+  await logToSheets({
+    caller_name: p.caller_name,
+    caller_phone: p.caller_phone,
+    caller_email: 'Not provided',
+    property_address: 'N/A',
+    enquiry_type: 'Agent Callback',
+    outcome: `Callback requested — Reason: ${p.reason}`,
+    follow_up_required: true
+  });
   return { success: true };
 }
 
 async function logCallRecord(p) {
-  await notifySlack(
-    `📋 *Call Log*\n` +
-    `Type: ${p.call_type}\n` +
-    `Caller: ${p.caller_name || 'Unknown'} — ${p.caller_phone || 'No number'}\n` +
-    `Reason: ${p.call_reason}\n` +
-    `Outcome: ${p.outcome}\n` +
-    `Follow up needed: ${p.follow_up_required ? 'YES' : 'No'}\n` +
-    `Notes: ${p.follow_up_notes || 'None'}`
-  );
+  await logToSheets({
+    caller_name: p.caller_name || 'Unknown',
+    caller_phone: p.caller_phone || 'Not provided',
+    caller_email: 'Not provided',
+    property_address: 'N/A',
+    enquiry_type: p.call_type,
+    outcome: p.outcome,
+    follow_up_required: p.follow_up_required
+  });
   return { success: true };
 }
 
 async function handleEndOfCall(message) {
-  const { structuredData, call } = message;
+  const { structuredData } = message;
   console.log('[END OF CALL] Outcome:', structuredData?.call_outcome);
-}
-
-async function notifySlack(text) {
-  if (!process.env.SLACK_WEBHOOK_URL) return;
-  try {
-    await axios.post(process.env.SLACK_WEBHOOK_URL, { text });
-  } catch (e) {
-    console.error('[SLACK ERROR]', e.message);
-  }
 }
 
 app.listen(process.env.PORT || 3000, () => {
